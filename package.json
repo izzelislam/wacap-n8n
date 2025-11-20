@@ -1,0 +1,48 @@
+{
+  "name": "n8n-nodes-wacap",
+  "version": "1.0.0",
+  "description": "n8n node for Wacap WhatsApp wrapper with full Baileys features",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc && gulp build:icons",
+    "dev": "tsc --watch",
+    "lint": "eslint nodes credentials --ext .ts",
+    "lintfix": "eslint nodes credentials --ext .ts --fix"
+  },
+  "keywords": [
+    "n8n-community-node-package",
+    "n8n",
+    "whatsapp",
+    "wacap",
+    "baileys"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/izzelislam/wacapp",
+  "author": {
+    "name": "pakoor"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/izzelislam/wacapp.git"
+  },
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": [
+      "dist/credentials/WacapApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/Wacap/Wacap.node.js",
+      "dist/nodes/WacapTrigger/WacapTrigger.node.js"
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "typescript": "^5.7.2",
+    "n8n-workflow": "^1.60.0",
+    "n8n-core": "^1.60.0",
+    "gulp": "^4.0.2"
+  },
+  "dependencies": {
+    "@pakor/wacap-wrapper": "^1.0.2"
+  }
+}
