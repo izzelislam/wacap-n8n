@@ -1,44 +1,50 @@
 import {
+  IAuthenticateGeneric,
+  ICredentialTestRequest,
   ICredentialType,
   INodeProperties,
 } from 'n8n-workflow';
 
 export class WacapApi implements ICredentialType {
   name = 'wacapApi';
-  displayName = 'Wacap API';
+  displayName = 'Wacap HTTP API';
   documentationUrl = 'https://github.com/izzelislam/wacapp';
   properties: INodeProperties[] = [
     {
-      displayName: 'Session ID',
-      name: 'sessionId',
+      displayName: 'Base URL',
+      name: 'baseUrl',
       type: 'string',
-      default: '',
+      default: 'http://localhost:3000',
       required: true,
-      description: 'Unique identifier for your WhatsApp session',
+      placeholder: 'http://localhost:3000',
+      description: 'Base URL of your Wacap API server',
     },
     {
-      displayName: 'Sessions Path',
-      name: 'sessionsPath',
+      displayName: 'API Key',
+      name: 'apiKey',
       type: 'string',
-      default: './sessions',
-      description: 'Directory path where session data will be stored',
-    },
-    {
-      displayName: 'Storage Adapter',
-      name: 'storageAdapter',
-      type: 'options',
-      options: [
-        {
-          name: 'SQLite',
-          value: 'sqlite',
-        },
-        {
-          name: 'Prisma',
-          value: 'prisma',
-        },
-      ],
-      default: 'sqlite',
-      description: 'Storage backend for session data',
+      typeOptions: {
+        password: true,
+      },
+      default: '',
+      description: 'API Key for authentication (leave empty if not required)',
     },
   ];
+
+  authenticate: IAuthenticateGeneric = {
+    type: 'generic',
+    properties: {
+      headers: {
+        'X-Api-Key': '={{$credentials.apiKey}}',
+      },
+    },
+  };
+
+  test: ICredentialTestRequest = {
+    request: {
+      baseURL: '={{$credentials.baseUrl}}',
+      url: '/api/sessions',
+      method: 'GET',
+    },
+  };
 }

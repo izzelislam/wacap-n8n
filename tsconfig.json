@@ -1,21 +1,24 @@
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "commonjs",
-    "lib": ["ES2022"],
-    "declaration": true,
-    "outDir": "./dist",
-    "rootDir": "./",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "moduleResolution": "node",
-    "allowSyntheticDefaultImports": true,
-    "declarationMap": true,
-    "sourceMap": true
-  },
-  "include": ["credentials/**/*", "nodes/**/*"],
-  "exclude": ["node_modules", "dist"]
+    "compilerOptions": {
+        "target": "ES2021",
+        "module": "commonjs",
+        "lib": ["ES2021"],
+        "declaration": true,
+        "outDir": "dist",
+        "rootDir": ".",
+        "strict": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "forceConsistentCasingInFileNames": true,
+        "resolveJsonModule": true,
+        "moduleResolution": "node",
+        "allowSyntheticDefaultImports": true,
+        "sourceMap": false,
+        "declarationMap": false
+    },
+    "include": [
+        "credentials/**/*.ts",
+        "nodes/**/*.ts"
+    ],
+    "exclude": ["node_modules", "dist"]
 }

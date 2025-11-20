@@ -4,36 +4,20 @@ import {
   INodeType,
   INodeTypeDescription,
   NodeOperationError,
+  IHttpRequestOptions,
 } from 'n8n-workflow';
-
-import { WacapWrapper } from '@pakor/wacap-wrapper';
-
-let wacapInstance: WacapWrapper | null = null;
-
-async function getWacapInstance(context: IExecuteFunctions): Promise<WacapWrapper> {
-  if (!wacapInstance) {
-    const credentials = await context.getCredentials('wacapApi');
-    wacapInstance = new WacapWrapper({
-      sessionsPath: credentials.sessionsPath as string || './sessions',
-      storageAdapter: credentials.storageAdapter as 'sqlite' | 'prisma' || 'sqlite',
-      autoDisplayQR: false,
-    });
-    await wacapInstance.init();
-  }
-  return wacapInstance;
-}
 
 export class Wacap implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Wacap WhatsApp',
+    displayName: 'Wacap',
     name: 'wacap',
     icon: 'file:wacap.svg',
     group: ['transform'],
     version: 1,
     subtitle: '={{$parameter["operation"] + ": " + $parameter["resource"]}}',
-    description: 'Interact with WhatsApp using Wacap wrapper',
+    description: 'Interact with WhatsApp using Wacap HTTP API',
     defaults: {
-      name: 'Wacap WhatsApp',
+      name: 'Wacap',
     },
     inputs: ['main'],
     outputs: ['main'],
@@ -234,18 +218,26 @@ export class Wacap implements INodeType {
 
       // COMMON FIELDS
       {
-        displayName: 'Phone Number (JID)',
-        name: 'jid',
+        displayName: 'Session',
+        name: 'session',
+        type: 'string',
+        required: true,
+        default: 'default',
+        description: 'Session name/ID',
+      },
+      {
+        displayName: 'Chat ID',
+        name: 'chatId',
         type: 'string',
         required: true,
         displayOptions: {
           show: {
-            operation: ['sendText', 'sendMedia', 'sendLocation', 'typing', 'recording', 'available', 'getProfilePicture'],
+            operation: ['sendText', 'sendMedia', 'sendLocation', 'typing', 'recording', 'available'],
           },
         },
         default: '',
-        placeholder: '6281234567890@s.whatsapp.net',
-        description: 'WhatsApp JID (phone number with @s.whatsapp.net)',
+        placeholder: '6281234567890@c.us',
+        description: 'Chat ID (phone with @c.us or group with @g.us)',
       },
 
       // MESSAGE FIELDS
@@ -410,135 +402,139 @@ export class Wacap implements INodeType {
     const operation = this.getNodeParameter('operation', 0) as string;
 
     const credentials = await this.getCredentials('wacapApi');
-    const sessionId = credentials.sessionId as string;
-
-    const wacap = await getWacapInstance(this);
+    const baseUrl = credentials.baseUrl as string;
 
     for (let i = 0; i < items.length; i++) {
       try {
+        let endpoint = '';
+        let method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'POST';
+        let body: any = {};
+
         if (resource === 'session') {
+          const session = this.getNodeParameter('session', i, 'default') as string;
+          
           if (operation === 'start') {
-            await wacap.sessionStart(sessionId);
-            returnData.push({
-              json: { success: true, message: 'Session started', sessionId },
-            });
+            endpoint = '/api/sessions';
+            method = 'POST';
+            body = { name: session };
           } else if (operation === 'stop') {
-            await wacap.sessionStop(sessionId);
-            returnData.push({
-              json: { success: true, message: 'Session stopped', sessionId },
-            });
+            endpoint = `/api/sessions/${session}`;
+            method = 'DELETE';
           } else if (operation === 'getInfo') {
-            const info = wacap.getSessionInfo(sessionId);
-            returnData.push({ json: info || {} });
+            endpoint = `/api/sessions/${session}`;
+            method = 'GET';
           } else if (operation === 'delete') {
-            await wacap.deleteSession(sessionId);
-            returnData.push({
-              json: { success: true, message: 'Session deleted', sessionId },
-            });
+            endpoint = `/api/sessions/${session}`;
+            method = 'DELETE';
           }
         } else if (resource === 'message') {
+          const session = this.getNodeParameter('session', i, 'default') as string;
+          
           if (operation === 'sendText') {
-            const jid = this.getNodeParameter('jid', i) as string;
+            const chatId = this.getNodeParameter('chatId', i) as string;
             const message = this.getNodeParameter('message', i) as string;
             const additionalOptions = this.getNodeParameter('additionalOptions', i, {}) as any;
 
-            const options: any = {};
-            if (additionalOptions.mentions) {
-              options.mentions = (additionalOptions.mentions as string).split(',').map(m => m.trim());
-            }
+            endpoint = '/api/sendText';
+            body = {
+              session,
+              chatId,
+              text: message,
+            };
 
-            const result = await wacap.sendMessage(sessionId, jid, message, options);
-            returnData.push({ json: { success: true, result } });
+            if (additionalOptions.mentions) {
+              body.mentions = (additionalOptions.mentions as string).split(',').map(m => m.trim());
+            }
           } else if (operation === 'sendMedia') {
-            const jid = this.getNodeParameter('jid', i) as string;
+            const chatId = this.getNodeParameter('chatId', i) as string;
             const mediaType = this.getNodeParameter('mediaType', i) as string;
             const mediaUrl = this.getNodeParameter('mediaUrl', i) as string;
             const caption = this.getNodeParameter('caption', i, '') as string;
             const fileName = this.getNodeParameter('fileName', i, '') as string;
 
-            const mimetypes: any = {
-              image: 'image/jpeg',
-              video: 'video/mp4',
-              audio: 'audio/mp3',
-              document: 'application/pdf',
+            endpoint = `/api/send${mediaType.charAt(0).toUpperCase() + mediaType.slice(1)}`;
+            body = {
+              session,
+              chatId,
+              url: mediaUrl,
+              caption,
             };
 
-            const result = await wacap.sendMedia(sessionId, jid, {
-              url: mediaUrl,
-              mimetype: mimetypes[mediaType],
-              caption,
-              fileName,
-            });
-
-            returnData.push({ json: { success: true, result } });
+            if (fileName) {
+              body.fileName = fileName;
+            }
           } else if (operation === 'sendLocation') {
-            const jid = this.getNodeParameter('jid', i) as string;
+            const chatId = this.getNodeParameter('chatId', i) as string;
             const latitude = this.getNodeParameter('latitude', i) as number;
             const longitude = this.getNodeParameter('longitude', i) as number;
 
-            const socket = wacap.getSocket(sessionId);
-            if (!socket) {
-              throw new NodeOperationError(this.getNode(), 'Session not connected');
-            }
-
-            const result = await socket.sendMessage(jid, {
-              location: {
-                degreesLatitude: latitude,
-                degreesLongitude: longitude,
-              },
-            });
-
-            returnData.push({ json: { success: true, result } });
+            endpoint = '/api/sendLocation';
+            body = {
+              session,
+              chatId,
+              latitude,
+              longitude,
+            };
           }
         } else if (resource === 'presence') {
-          const jid = this.getNodeParameter('jid', i) as string;
-          const socket = wacap.getSocket(sessionId);
+          const session = this.getNodeParameter('session', i, 'default') as string;
+          const chatId = this.getNodeParameter('chatId', i) as string;
           
-          if (!socket) {
-            throw new NodeOperationError(this.getNode(), 'Session not connected');
-          }
-
           let presenceType = 'available';
           if (operation === 'typing') presenceType = 'composing';
           else if (operation === 'recording') presenceType = 'recording';
 
-          await socket.sendPresenceUpdate(presenceType as any, jid);
-          returnData.push({ json: { success: true, presence: presenceType, jid } });
+          endpoint = '/api/sendPresence';
+          body = {
+            session,
+            chatId,
+            presence: presenceType,
+          };
         } else if (resource === 'group') {
-          const socket = wacap.getSocket(sessionId);
+          const session = this.getNodeParameter('session', i, 'default') as string;
           
-          if (!socket) {
-            throw new NodeOperationError(this.getNode(), 'Session not connected');
-          }
-
           if (operation === 'getAll') {
-            const groups = await socket.groupFetchAllParticipating();
-            returnData.push({ json: { groups: Object.values(groups) } });
+            endpoint = `/api/sessions/${session}/groups`;
+            method = 'GET';
           } else if (operation === 'getMetadata') {
             const groupJid = this.getNodeParameter('groupJid', i) as string;
-            const metadata = await socket.groupMetadata(groupJid);
-            returnData.push({ json: metadata });
+            endpoint = `/api/sessions/${session}/groups/${groupJid}`;
+            method = 'GET';
           }
         } else if (resource === 'contact') {
-          const socket = wacap.getSocket(sessionId);
+          const session = this.getNodeParameter('session', i, 'default') as string;
           
-          if (!socket) {
-            throw new NodeOperationError(this.getNode(), 'Session not connected');
-          }
-
           if (operation === 'getProfilePicture') {
-            const jid = this.getNodeParameter('jid', i) as string;
-            try {
-              const ppUrl = await socket.profilePictureUrl(jid, 'image');
-              returnData.push({ json: { success: true, profilePictureUrl: ppUrl } });
-            } catch (error) {
-              returnData.push({ json: { success: false, error: 'No profile picture found' } });
-            }
+            const chatId = this.getNodeParameter('chatId', i, '') as string;
+            endpoint = `/api/sessions/${session}/contacts/${chatId}/profile-picture`;
+            method = 'GET';
           }
         }
+
+        // Make HTTP request
+        const options: IHttpRequestOptions = {
+          method,
+          url: `${baseUrl}${endpoint}`,
+          json: true,
+        };
+
+        if (method !== 'GET' && Object.keys(body).length > 0) {
+          options.body = body;
+        }
+
+        if (credentials.apiKey) {
+          options.headers = {
+            'X-Api-Key': credentials.apiKey as string,
+          };
+        }
+
+        const response = await this.helpers.httpRequest(options);
+        returnData.push({ json: response });
+
       } catch (error) {
         if (this.continueOnFail()) {
-          returnData.push({ json: { error: error.message } });
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          returnData.push({ json: { error: errorMessage } });
           continue;
         }
         throw error;
