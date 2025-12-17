@@ -109,12 +109,65 @@ Perform WhatsApp operations via HTTP API.
 
 ### Wacap Trigger (Webhook Node)
 
-Receive events from Wacap API server via webhooks.
+Receive events from Wacap API server via webhooks. Returns comprehensive data similar to WAHA.
 
 **Events:**
-- **Message**: New message received
-- **Message Update**: Message status changed
-- **Session Status**: Session connection status changed
+- **Message Received**: New message received
+- **Message Sent**: Message sent confirmation
+- **Session Connected**: Session connected successfully
+- **Session Disconnected**: Session disconnected
+- **Session QR**: QR code generated for pairing
+- **All Events**: Listen to all events
+
+**Options:**
+- **Ignore From Me**: Skip messages sent by yourself (default: true)
+- **Ignore Groups**: Skip group messages (default: false)
+- **Ignore Status/Broadcast**: Skip status updates (default: true)
+
+**Output Data Structure (Message Events):**
+```json
+{
+  "event": "message.received",
+  "timestamp": 1702834567890,
+  "sessionId": "my-session",
+  "messageId": "ABC123",
+  "from": "628123456789@s.whatsapp.net",
+  "to": "628987654321@s.whatsapp.net",
+  "body": "Hello!",
+  "pushName": "John Doe",
+  "messageType": "text",
+  "isFromMe": false,
+  "isGroup": false,
+  "isStatus": false,
+  "participant": null,
+  "hasMedia": false,
+  "media": null,
+  "chat": {
+    "id": "628123456789@s.whatsapp.net",
+    "isGroup": false
+  },
+  "sender": {
+    "id": "628123456789@s.whatsapp.net",
+    "pushName": "John Doe"
+  },
+  "payload": { /* raw webhook payload */ }
+}
+```
+
+**Setup Webhook:**
+1. Create Wacap Trigger node in n8n
+2. Copy the Webhook URL shown in the node
+3. Register webhook in Wacap API:
+```bash
+curl -X POST https://your-wacap-server.com/api/webhooks \
+  -H "Content-Type: application/json" \
+  -H "X-Device-Token: YOUR_TOKEN" \
+  -d '{
+    "sessionId": "my-session",
+    "url": "YOUR_N8N_WEBHOOK_URL",
+    "events": ["message.received", "message.sent", "session.connected"]
+  }'
+```
 
 ## Usage Examples
 

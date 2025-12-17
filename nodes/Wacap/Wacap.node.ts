@@ -500,7 +500,9 @@ export class Wacap implements INodeType {
           method,
           url: `${baseUrl}${endpoint}`,
           json: true,
-          headers: {},
+          headers: {
+            'Content-Type': 'application/json',
+          },
         };
 
         if (method !== 'GET' && Object.keys(body).length > 0) {
@@ -510,20 +512,61 @@ export class Wacap implements INodeType {
         // Add authentication header
         if (credentials.apiKey) {
           options.headers = {
+            ...options.headers,
             'X-Device-Token': credentials.apiKey as string,
           };
         }
 
+        // Debug log
+        console.log(`[Wacap] ${method} ${options.url}`, JSON.stringify(body));
+
         const response = await this.helpers.httpRequest(options);
         returnData.push({ json: response });
 
-      } catch (error) {
+      } catch (error: unknown) {
+        // Extract detailed error info from API response
+        let errorMessage = 'Unknown error';
+        let errorDetails: Record<string, unknown> = {};
+
+        if (error && typeof error === 'object') {
+          const err = error as Record<string, unknown>;
+          
+          // Try to get response body from axios error
+          if (err.response && typeof err.response === 'object') {
+            const response = err.response as Record<string, unknown>;
+            errorDetails = {
+              status: response.status,
+              statusText: response.statusText,
+              data: response.data,
+            };
+            
+            // Extract message from response data
+            if (response.data && typeof response.data === 'object') {
+              const data = response.data as Record<string, unknown>;
+              if (data.error && typeof data.error === 'object') {
+                const apiError = data.error as Record<string, unknown>;
+                errorMessage = (apiError.message as string) || (apiError.code as string) || 'API Error';
+              } else if (data.message) {
+                errorMessage = data.message as string;
+              }
+            }
+          } else if (err.message) {
+            errorMessage = err.message as string;
+          }
+        }
+
         if (this.continueOnFail()) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          returnData.push({ json: { error: errorMessage } });
+          returnData.push({ 
+            json: { 
+              error: errorMessage,
+              details: errorDetails,
+            } 
+          });
           continue;
         }
-        throw error;
+        
+        // Throw with more details
+        throw new Error(`Wacap API Error: ${errorMessage} - ${JSON.stringify(errorDetails)}`);
       }
     }
 
