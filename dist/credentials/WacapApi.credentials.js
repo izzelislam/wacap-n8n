@@ -4,8 +4,8 @@ exports.WacapApi = void 0;
 class WacapApi {
     constructor() {
         this.name = 'wacapApi';
-        this.displayName = 'Wacap HTTP API';
-        this.documentationUrl = 'https://github.com/izzelislam/wacapp';
+        this.displayName = 'Wacap Docker API';
+        this.documentationUrl = 'https://hub.docker.com/r/bangfkr/wacap';
         this.properties = [
             {
                 displayName: 'Base URL',
@@ -14,31 +14,31 @@ class WacapApi {
                 default: 'http://localhost:3000',
                 required: true,
                 placeholder: 'http://localhost:3000',
-                description: 'Base URL of your Wacap API server',
+                description: 'Base URL of your Wacap Docker API server',
             },
             {
-                displayName: 'API Key',
+                displayName: 'Device Token',
                 name: 'apiKey',
                 type: 'string',
                 typeOptions: {
                     password: true,
                 },
                 default: '',
-                description: 'API Key for authentication (leave empty if not required)',
+                description: 'Device Token for API authentication (get from Settings > API Usage in dashboard)',
             },
         ];
         this.authenticate = {
             type: 'generic',
             properties: {
                 headers: {
-                    'X-Api-Key': '={{$credentials.apiKey}}',
+                    'X-Device-Token': '={{$credentials.apiKey}}',
                 },
             },
         };
         this.test = {
             request: {
                 baseURL: '={{$credentials.baseUrl}}',
-                url: '/api/sessions',
+                url: '/api/health',
                 method: 'GET',
             },
         };

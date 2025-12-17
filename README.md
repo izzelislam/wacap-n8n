@@ -1,15 +1,14 @@
 # n8n-nodes-wacap
 
-n8n community node for WhatsApp integration using Wacap wrapper (Baileys v7.0.0-rc.8)
+n8n community node for WhatsApp integration using Wacap Docker API.
 
 ## Overview
 
-This package provides n8n nodes that connect to an external Wacap HTTP API server. The nodes act as HTTP clients to interact with WhatsApp through the API.
+This package provides n8n nodes that connect to a Wacap Docker API server for WhatsApp automation.
 
 **Architecture:**
-- n8n nodes (this package) → HTTP requests → Wacap API Server → WhatsApp
-- Similar to how [n8n-nodes-waha](https://github.com/devlikeapro/n8n-nodes-waha) connects to WAHA server
-- QR code scanning and session management handled by the API server, not in n8n
+- n8n nodes (this package) → HTTP requests → Wacap Docker API → WhatsApp
+- QR code scanning and session management handled by the Docker container
 
 ## Installation
 
@@ -27,25 +26,50 @@ n8n start
 
 ## Prerequisites
 
-You need a **Wacap API Server** running separately from n8n:
+You need a **Wacap Docker** container running:
 
-1. The API server handles WhatsApp connections, QR scanning, and sessions
-2. Example: `http://localhost:3000`
-3. The n8n nodes make HTTP requests to this server
+```bash
+docker run -d \
+  --name wacap \
+  -p 3000:3000 \
+  -v wacap_data:/app/data \
+  -e JWT_SECRET=your-secret-key \
+  bangfkr/wacap:latest
+```
+
+Or use docker-compose:
+```yaml
+version: '3.8'
+services:
+  wacap:
+    image: bangfkr/wacap:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - wacap_data:/app/data
+    environment:
+      - JWT_SECRET=your-secret-key
+volumes:
+  wacap_data:
+```
 
 ## Configuration
 
-### 1. Setup Credentials
+### 1. Get Device Token
+
+1. Open Wacap Dashboard at `http://localhost:3000`
+2. Register/Login to your account
+3. Go to **Settings** → **API Usage**
+4. Create a new Device Token
+5. Copy the token
+
+### 2. Setup Credentials in n8n
 
 1. Go to **Credentials** → **New**
-2. Search for "Wacap HTTP API"
+2. Search for "Wacap Docker API"
 3. Configure:
    - **Base URL**: Your API server URL (e.g., `http://localhost:3000`)
-   - **API Key**: Optional authentication key
-
-### 2. Test Connection
-
-The credential will automatically test the connection to `/api/sessions`
+   - **Device Token**: Paste the token from step 1
 
 ## Nodes
 
@@ -53,29 +77,34 @@ The credential will automatically test the connection to `/api/sessions`
 
 Perform WhatsApp operations via HTTP API.
 
-**Resources:**
-
-#### Session
-- **Start**: Create/start a WhatsApp session
-- **Stop**: Stop a running session
+#### Session Operations
+- **Create**: Create/start a new WhatsApp session
 - **Get Info**: Get session information
+- **Get All**: List all sessions
+- **Stop**: Stop a running session
+- **Restart**: Restart a session
 - **Delete**: Delete session data
+- **Get QR**: Get QR code for pairing
 
-#### Message
+#### Message Operations
 - **Send Text**: Send text messages
 - **Send Media**: Send image, video, audio, or document
-- **Send Location**: Send GPS location
+- **Send Location**: Send GPS location with name and address
+- **Send Contact**: Send contact card (vCard)
+- **Mark as Read**: Mark messages as read (blue tick)
 
-#### Presence
-- **Send Typing**: Show typing indicator
-- **Send Recording**: Show recording indicator
-- **Send Available**: Set as available
+#### Presence Operations
+- **Typing**: Show typing indicator
+- **Recording**: Show recording indicator
+- **Online**: Set status as online
+- **Offline**: Set status as offline
+- **Paused**: Stop typing indicator
 
-#### Group
-- **Get All**: Fetch all groups
+#### Group Operations
+- **Get All**: Fetch all groups for a session
 - **Get Metadata**: Get group information
 
-#### Contact
+#### Contact Operations
 - **Get Profile Picture**: Fetch contact's profile picture
 
 ### Wacap Trigger (Webhook Node)
@@ -87,17 +116,14 @@ Receive events from Wacap API server via webhooks.
 - **Message Update**: Message status changed
 - **Session Status**: Session connection status changed
 
-**Filters:**
-- **Session Name**: Filter by specific session (or leave empty for all)
-
 ## Usage Examples
 
-### Start Session
+### Create Session
 
 **Node:** Wacap  
 **Resource:** Session  
-**Operation:** Start  
-**Session:** `default`
+**Operation:** Create  
+**Session ID:** `my-session`
 
 ### Send Text Message
 
@@ -105,8 +131,8 @@ Receive events from Wacap API server via webhooks.
 **Resource:** Message  
 **Operation:** Send Text  
 **Fields:**
-- Session: `default`
-- Chat ID: `6281234567890@c.us`
+- Session ID: `my-session`
+- To: `628123456789`
 - Message: `Hello from n8n!`
 
 ### Send Image
@@ -115,77 +141,98 @@ Receive events from Wacap API server via webhooks.
 **Resource:** Message  
 **Operation:** Send Media  
 **Fields:**
-- Session: `default`
-- Chat ID: `6281234567890@c.us`
+- Session ID: `my-session`
+- To: `628123456789`
 - Media Type: `Image`
+- Media Source: `URL`
 - Media URL: `https://example.com/image.jpg`
 - Caption: `Check this out!`
 
-### Receive Messages (Webhook)
+### Send Location
 
-**Node:** Wacap Trigger  
-**Event:** Message  
-**Session Name:** `default` (or leave empty)
+**Node:** Wacap  
+**Resource:** Message  
+**Operation:** Send Location  
+**Fields:**
+- Session ID: `my-session`
+- To: `628123456789`
+- Latitude: `-6.2088`
+- Longitude: `106.8456`
+- Location Name: `Jakarta`
+- Address: `Indonesia`
 
-**Webhook URL:** Copy the webhook URL from the trigger node
+### Send Contact Card
 
-**Configure in API Server:** Send webhook events to this URL
+**Node:** Wacap  
+**Resource:** Message  
+**Operation:** Send Contact  
+**Fields:**
+- Session ID: `my-session`
+- To: `628123456789`
+- Contact Full Name: `John Doe`
+- Contact Phone Number: `628987654321`
+- Contact Organization: `Company Inc`
 
-### Auto-Reply Workflow
+### Show Typing Before Reply
+
+**Node:** Wacap  
+**Resource:** Presence  
+**Operation:** Typing  
+**Fields:**
+- Session ID: `my-session`
+- To: `628123456789`
+
+### Mark Messages as Read
+
+**Node:** Wacap  
+**Resource:** Message  
+**Operation:** Mark as Read  
+**Fields:**
+- Session ID: `my-session`
+- To: `628123456789`
+- Message IDs: `msg1,msg2,msg3`
+
+### Auto-Reply Workflow with Typing
 
 ```
 [Wacap Trigger: Message]
   ↓
-[IF: message contains "hello"]
-  ↓ true
+[Wacap: Typing] → Show typing indicator
+  ↓
+[Wait: 2 seconds]
+  ↓
 [Wacap: Send Text] → "Hi there!"
-```
-
-### Send Daily Report
-
-```
-[Schedule Trigger: Every day 9 AM]
   ↓
-[Function: Generate report]
-  ↓
-[Wacap: Send Text] → Group/Contact
+[Wacap: Mark as Read] → Mark incoming message as read
 ```
 
-## Chat ID Format
+## Phone Number Format
 
-- **Individual**: `6281234567890@c.us` (phone number + @c.us)
-- **Group**: `120363xxxxx@g.us` (group ID + @g.us)
-
-Note: Different from JID format (@s.whatsapp.net), this uses the simplified format.
+- Use phone number without `+` or spaces
+- Example: `628123456789` (Indonesia)
+- For groups: Use group ID like `120363xxxxx@g.us`
 
 ## API Endpoints Used
 
 The nodes make requests to these endpoints:
 
-- `POST /api/sessions` - Start session
-- `DELETE /api/sessions/:session` - Stop session
-- `GET /api/sessions/:session` - Get session info
-- `POST /api/sendText` - Send text message
-- `POST /api/sendImage` - Send image
-- `POST /api/sendVideo` - Send video
-- `POST /api/sendAudio` - Send audio
-- `POST /api/sendDocument` - Send document
-- `POST /api/sendLocation` - Send location
-- `POST /api/sendPresence` - Send presence update
-- `GET /api/sessions/:session/groups` - Get groups
-- `GET /api/sessions/:session/groups/:groupId` - Get group metadata
-- `GET /api/sessions/:session/contacts/:chatId/profile-picture` - Get profile picture
-
-## Comparison with Direct Integration
-
-| Feature | This Package | Direct Wrapper |
-|---------|-------------|----------------|
-| Architecture | HTTP Client → API Server | Direct Library Integration |
-| QR Scanning | In API Server | In n8n Workflow |
-| Session Management | External Server | In n8n Process |
-| Scalability | High (separate server) | Limited (in n8n) |
-| Multi-instance | Yes (via API server) | Complex |
-| Best for | Production, Multiple n8n instances | Single n8n instance |
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/sessions` | GET | List all sessions |
+| `/api/sessions` | POST | Create session |
+| `/api/sessions/:id` | GET | Get session info |
+| `/api/sessions/:id` | DELETE | Delete session |
+| `/api/sessions/:id/stop` | POST | Stop session |
+| `/api/sessions/:id/restart` | POST | Restart session |
+| `/api/sessions/:id/qr` | GET | Get QR code |
+| `/api/send/text` | POST | Send text message |
+| `/api/send/media` | POST | Send media |
+| `/api/send/location` | POST | Send location |
+| `/api/send/contact` | POST | Send contact |
+| `/api/sessions/:id/groups` | GET | Get groups |
+| `/api/sessions/:id/groups/:groupId` | GET | Get group metadata |
+| `/api/send/presence` | POST | Send presence (typing, online) |
+| `/api/send/read` | POST | Mark messages as read |
 
 ## Error Handling
 
@@ -212,6 +259,5 @@ MIT
 
 ## Links
 
+- Docker Hub: https://hub.docker.com/r/bangfkr/wacap
 - GitHub: https://github.com/izzelislam/wacapp
-- Wacap Wrapper: https://www.npmjs.com/package/@pakor/wacap-wrapper
-- Baileys: https://github.com/WhiskeySockets/Baileys
